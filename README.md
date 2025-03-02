@@ -53,8 +53,22 @@ Asgard World Generator is a FastAPI-based web application that generates procedu
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions to the Asgard World Generator project! If you're interested in contributing, please follow these steps:
+
+1. Fork the repository
+2. Create a new branch for your feature or bug fix
+3. Make your changes and commit them with clear, descriptive commit messages
+4. Push your changes to your fork
+5. Submit a pull request to the main repository
+
+Please make sure to follow our [code of conduct](CODE_OF_CONDUCT.md) and read our [contributing guidelines](CONTRIBUTING.md) before submitting your pull request.
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and available under the [Apache License 2.0](LICENSE).
+
+## Contact
+
+If you have any questions or suggestions, please open an issue on the GitHub repository or contact the project maintainers.
+
+Thank you for your interest in the Asgard World Generator project!
