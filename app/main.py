@@ -1,8 +1,8 @@
 import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
 import redis
 import json
 from typing import List
@@ -13,14 +13,14 @@ app = FastAPI()
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Set up Jinja2 templates
+# Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
-# Set up Redis connection
+# Redis connection
 redis_host = os.getenv("REDIS_HOST", "localhost")
-redis_client = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
+redis_client = redis.Redis(host=redis_host, port=6379, db=0)
 
-# WebSocket manager
+# WebSocket connections
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -38,11 +38,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    visit_count = redis_client.incr("visit_count")
-    return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
-
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -52,25 +47,27 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.broadcast(f"Message: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        await manager.broadcast(f"Client disconnected")
+        await manager.broadcast(f"Client left the chat")
+
+@app.get("/")
+async def root(request: Request):
+    visits = redis_client.incr("visit_count")
+    return templates.TemplateResponse("index.html", {"request": request, "visits": visits})
 
 @app.get("/world/{size}")
 async def generate_world(size: int):
-    try:
-        world = World(size)
-        world.define_tile_types()
-        world.generate_world()
-        return JSONResponse(content={"message": f"World of size {size}x{size} generated", "world": world.get_world_grid()})
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=400)
+    world = World(size)
+    world.define_tile_types()
+    world.generate_world()
+    return JSONResponse(content={"world": world.get_world_grid()})
 
 @app.get("/health")
 async def health_check():
     try:
         redis_client.ping()
         return JSONResponse(content={"status": "healthy", "redis": "connected"})
-    except redis.exceptions.ConnectionError:
-        return JSONResponse(content={"status": "unhealthy", "redis": "disconnected"}, status_code=500)
+    except redis.ConnectionError:
+        return JSONResponse(content={"status": "unhealthy", "redis": "disconnected"}, status_code=503)
 
 if __name__ == "__main__":
     import uvicorn
