@@ -1,56 +1,72 @@
-import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.templating import Jinja2Templates
+import os
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-import redis
+from fastapi.templating import Jinja2Templates
+from redis import Redis
 from app.world_generator import World
+from typing import List
 
 app = FastAPI()
 
-# Jinja2 Templates setup
-templates = Jinja2Templates(directory="templates")
-
-# Static files setup
+# Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Redis connection
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+# Setup Jinja2 templates
+templates = Jinja2Templates(directory="templates")
+
+# Setup Redis connection
+redis = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379, db=0, decode_responses=True)
 
 # WebSocket connections
-active_connections = []
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
 
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_connections.append(websocket)
+    await manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
-            for connection in active_connections:
-                await connection.send_text(f"Message: {data}")
+            await manager.broadcast(f"Message: {data}")
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        manager.disconnect(websocket)
+        await manager.broadcast(f"Client left the chat")
 
 @app.get("/")
 async def root(request: Request):
-    visits = redis_client.incr("visit_count")
+    visits = redis.incr("visit_count")
     return templates.TemplateResponse("index.html", {"request": request, "visits": visits})
+
+@app.get("/world/{size}")
+async def generate_world(size: int):
+    if size <= 0 or size > 100:
+        raise HTTPException(status_code=400, detail="Invalid world size. Must be between 1 and 100.")
+    world = World(size)
+    world.define_tile_types()
+    world.generate_world()
+    return {"message": f"World of size {size}x{size} generated", "world": world.get_world_grid()}
 
 @app.get("/health")
 async def health():
     try:
-        redis_client.ping()
-        return JSONResponse(content={"status": "healthy", "redis": "connected"})
-    except redis.ConnectionError:
-        return JSONResponse(content={"status": "unhealthy", "redis": "disconnected"}, status_code=503)
-
-@app.get("/world/{size}")
-async def generate_world(size: int):
-    world = World(size)
-    world.define_tile_types()
-    generated_world = world.generate_world()
-    return JSONResponse(content={"world": generated_world})
+        redis.ping()
+        return {"status": "healthy", "redis": "connected"}
+    except:
+        return {"status": "unhealthy", "redis": "disconnected"}
 
 if __name__ == "__main__":
     import uvicorn
