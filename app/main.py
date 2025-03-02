@@ -1,29 +1,27 @@
-import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from starlette.requests import Request
 import redis
-import json
-from typing import List
-
-from app.world_generator import World
+import os
+from app.world_generator import generate_world
 
 app = FastAPI()
 
-# Static files and Jinja2 templates setup
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Setup templates
 templates = Jinja2Templates(directory="templates")
 
-# Redis connection setup
-redis_host = os.getenv("REDIS_HOST", "localhost")
-redis_client = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
+# Setup static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Setup Redis connection
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = redis.from_url(redis_url)
 
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -43,6 +41,13 @@ async def root(request: Request):
     visit_count = redis_client.incr("visit_count")
     return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
 
+@app.get("/world/{size}", response_class=HTMLResponse)
+async def get_world(size: int, request: Request):
+    if size not in [10, 20, 50]:
+        raise HTTPException(status_code=400, detail="Size must be 10, 20, or 50")
+    world = generate_world(size)
+    return templates.TemplateResponse("world.html", {"request": request, "size": size, "world": world})
+
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -52,22 +57,14 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.broadcast(f"Message: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        await manager.broadcast(f"Client disconnected")
-
-@app.get("/world/{size}")
-async def generate_world(size: int):
-    if size <= 0 or size > 100:
-        raise HTTPException(status_code=400, detail="Size must be between 1 and 100")
-    world = World(size)
-    world.generate_world()
-    return {"grid": world.get_world_grid()}
+        await manager.broadcast(f"Client left the chat")
 
 @app.get("/health")
 async def health_check():
     try:
         redis_client.ping()
         return {"status": "healthy", "redis": "connected"}
-    except redis.ConnectionError:
+    except redis.exceptions.ConnectionError:
         return {"status": "unhealthy", "redis": "disconnected"}
 
 if __name__ == "__main__":
