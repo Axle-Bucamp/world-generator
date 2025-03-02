@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generated World</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .world-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .world-grid {
+            display: grid;
+            grid-template-columns: repeat({{ size }}, 20px);
+            gap: 1px;
+        }
+        .cell {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+        }
+        .grass { background-color: #7cfc00; }
+        .water { background-color: #4169e1; }
+        .mountain { background-color: #a0522d; }
+        .forest { background-color: #228b22; }
+    </style>
+</head>
+<body>
+    <div class="world-container">
+        <h1>Generated World ({{ size }}x{{ size }})</h1>
+        <div class="world-grid">
+            {% for row in world %}
+                {% for cell in row %}
+                    <div class="cell {{ cell }}"></div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        <p><a href="/">Back to Home</a></p>
+    </div>
+</body>
+</html>
