@@ -8,15 +8,13 @@ import uvicorn
 
 app = FastAPI()
 
-# Mount static files
+# Setup templates and static files
+templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Set up Jinja2 templates
-templates = Jinja2Templates(directory="templates")
-
-# Set up Redis connection
+# Setup Redis connection
 redis_host = os.getenv("REDIS_HOST", "localhost")
-redis_port = int(os.getenv("REDIS_PORT", 6379))
+redis_port = os.getenv("REDIS_PORT", 6379)
 redis_client = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
 
 @app.get("/", response_class=HTMLResponse)
@@ -32,9 +30,9 @@ async def health_check():
     try:
         # Check Redis connection
         redis_client.ping()
-        return {"status": "healthy", "redis_connection": "ok"}
+        return {"status": "healthy", "redis": "connected"}
     except redis.ConnectionError:
-        return {"status": "unhealthy", "redis_connection": "failed"}
+        return {"status": "unhealthy", "redis": "disconnected"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
