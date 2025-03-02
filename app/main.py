@@ -1,6 +1,5 @@
 import os
-from fastapi import FastAPI, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import redis
@@ -9,33 +8,30 @@ import uvicorn
 app = FastAPI()
 
 # Mount the static directory
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Set up Jinja2 templates
-templates = Jinja2Templates(directory="templates")
+# Setup Jinja2 templates
+templates = Jinja2Templates(directory="app/templates")
 
-# Redis connection
-redis_host = os.environ.get('REDIS_HOST', 'localhost')
-redis_port = os.environ.get('REDIS_PORT', 6379)
-redis_client = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
+# Setup Redis connection
+redis_host = os.getenv("REDIS_HOST", "localhost")
+redis_port = int(os.getenv("REDIS_PORT", 6379))
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
-def get_redis():
-    return redis_client
-
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request, redis: redis.Redis = Depends(get_redis)):
-    # Increment the visit counter
-    visit_count = redis.incr("visit_count")
+@app.get("/")
+async def root(request: Request):
+    # Increment visit counter
+    visit_count = redis_client.incr("visit_count")
     
-    # Render the template with the visit count
+    # Render template with visit count
     return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
 
 @app.get("/health")
-async def health(redis: redis.Redis = Depends(get_redis)):
+async def health_check():
     try:
-        redis.ping()
+        redis_client.ping()
         return {"status": "healthy", "redis": "connected"}
-    except redis.exceptions.ConnectionError:
+    except redis.ConnectionError:
         return {"status": "unhealthy", "redis": "disconnected"}
 
 if __name__ == "__main__":
