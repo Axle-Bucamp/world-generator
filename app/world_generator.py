@@ -1,16 +1,17 @@
 import random
+class World:
+    def __init__(self, size):
+        self.grid = [[None for _ in range(size)] for _ in range(size)]
 
-def initialize_world(width, height)
-    # Initialize empty world grid
-    return [[None for _ in range(height)] for _ in range(width)]
+    def define_tile_types(self):
+        tile_types = ['water', 'land', 'dirt']
+        return tile_types
 
-def define_tile_types()
-    # Define tile types (e.g., water, land, etc.)
-    return [1, 0]
-
-def generate_world(grid)
-    # Generate the world using wave function collapse algorithm
-    for x in range(len(grid))
-        for y in range(len(grid[0]))
-            grid[x][y] = random.choice(define_tile_types())
-    return grid
+    def generate_world(self, size):
+        tile_types = self.define_tile_types()
+        for i in range(size):
+            for j in range(size):
+                if random.random() < 0.5:
+                    self.grid[i][j] = tile_types[0]
+                else:
+                    self.grid[i][j] = tile_types[1]
