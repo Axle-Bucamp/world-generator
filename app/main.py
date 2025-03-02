@@ -2,16 +2,16 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 import redis
 from app.world_generator import World
 
 app = FastAPI()
 
-# Setup Jinja2 templates
+# Jinja2 Templates setup
 templates = Jinja2Templates(directory="templates")
 
-# Setup static files
+# Static files setup
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Redis connection
@@ -32,25 +32,25 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         active_connections.remove(websocket)
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def root(request: Request):
-    visit_count = redis_client.incr("visit_count")
-    return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
+    visits = redis_client.incr("visit_count")
+    return templates.TemplateResponse("index.html", {"request": request, "visits": visits})
+
+@app.get("/health")
+async def health():
+    try:
+        redis_client.ping()
+        return JSONResponse(content={"status": "healthy", "redis": "connected"})
+    except redis.ConnectionError:
+        return JSONResponse(content={"status": "unhealthy", "redis": "disconnected"}, status_code=503)
 
 @app.get("/world/{size}")
 async def generate_world(size: int):
     world = World(size)
     world.define_tile_types()
     generated_world = world.generate_world()
-    return {"world": generated_world}
-
-@app.get("/health")
-async def health_check():
-    try:
-        redis_client.ping()
-        return {"status": "healthy", "redis": "connected"}
-    except redis.ConnectionError:
-        return {"status": "unhealthy", "redis": "disconnected"}
+    return JSONResponse(content={"world": generated_world})
 
 if __name__ == "__main__":
     import uvicorn
