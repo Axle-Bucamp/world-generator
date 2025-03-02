@@ -4,13 +4,12 @@ from fastapi.responses import HTMLResponse
 from .dependencies import get_redis
 
 app = FastAPI()
-
 templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
+async def root(request: Request):
     redis = get_redis()
-    visit_count = redis.incr("visits")
+    visit_count = redis.incr("visit_count")
     return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
 
 @app.get("/health")
