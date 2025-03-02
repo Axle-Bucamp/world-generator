@@ -1,13 +1,12 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.requests import Request
+from fastapi.responses import JSONResponse
 import redis
-import json
+import uvicorn
 from typing import List
-
-# Import the World class from world_generator.py
+import json
 from app.world_generator import World
 
 app = FastAPI()
@@ -54,15 +53,13 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.broadcast(f"Message: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        await manager.broadcast(f"Client left the chat")
+        await manager.broadcast("Client left the chat")
 
 @app.get("/world/{size}")
 async def generate_world(size: int):
-    if size <= 0 or size > 100:
-        raise HTTPException(status_code=400, detail="Size must be between 1 and 100")
     world = World(size)
     world.generate_world()
-    return {"world": world.get_world_grid()}
+    return JSONResponse(content={"world": world.get_world_grid()})
 
 @app.get("/health")
 async def health_check():
@@ -70,8 +67,7 @@ async def health_check():
         redis_client.ping()
         return {"status": "healthy", "redis": "connected"}
     except redis.ConnectionError:
-        return {"status": "unhealthy", "redis": "disconnected"}
+        return JSONResponse(status_code=503, content={"status": "unhealthy", "redis": "disconnected"})
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
