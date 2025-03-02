@@ -1,11 +1,13 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from redis import Redis
-from pydantic import BaseModel
-from typing import List
+from fastapi.responses import HTMLResponse
+from starlette.requests import Request
+import redis
 import json
+from typing import List
+
 from app.world_generator import World
 
 app = FastAPI()
@@ -14,9 +16,9 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Redis connection
+# Redis connection setup
 redis_host = os.getenv("REDIS_HOST", "localhost")
-redis = Redis(host=redis_host, port=6379, db=0, decode_responses=True)
+redis_client = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -36,13 +38,11 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Root route
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    visits = redis.incr("visit_count")
-    return templates.TemplateResponse("index.html", {"request": request, "visits": visits})
+    visit_count = redis_client.incr("visit_count")
+    return templates.TemplateResponse("index.html", {"request": request, "visit_count": visit_count})
 
-# WebSocket route for chat
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -54,20 +54,20 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
         await manager.broadcast(f"Client disconnected")
 
-# World generation route
 @app.get("/world/{size}")
 async def generate_world(size: int):
+    if size <= 0 or size > 100:
+        raise HTTPException(status_code=400, detail="Size must be between 1 and 100")
     world = World(size)
     world.generate_world()
-    return {"world": world.get_world_grid()}
+    return {"grid": world.get_world_grid()}
 
-# Health check route
 @app.get("/health")
 async def health_check():
     try:
-        redis.ping()
+        redis_client.ping()
         return {"status": "healthy", "redis": "connected"}
-    except:
+    except redis.ConnectionError:
         return {"status": "unhealthy", "redis": "disconnected"}
 
 if __name__ == "__main__":
