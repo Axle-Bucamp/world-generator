@@ -12,24 +12,29 @@ def test_read_main():
 def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json() == {"status": "healthy", "redis_connected": True}
 
 @pytest.mark.parametrize("size", [10, 20, 50])
 def test_generate_world(size):
     response = client.get(f"/world/{size}")
     assert response.status_code == 200
-    assert f"Generated World ({size}x{size})" in response.text
+    assert f"World size: {size}x{size}" in response.text
 
 def test_invalid_world_size():
     response = client.get("/world/101")
     assert response.status_code == 400
     assert "Invalid world size" in response.text
 
-# This test assumes you have implemented WebSocket functionality
 @pytest.mark.asyncio
 async def test_websocket_chat():
     with client.websocket_connect("/ws/chat") as websocket:
-        data = "Hello, World!"
+        data = "Hello, Asgard!"
         await websocket.send_text(data)
         response = await websocket.receive_text()
         assert data in response
+
+# Additional test for world coordinates
+def test_world_coordinates():
+    response = client.get("/world/10/5")
+    assert response.status_code == 200
+    assert "World coordinates: x=10, z=5" in response.text
